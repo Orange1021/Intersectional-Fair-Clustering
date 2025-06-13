@@ -26,6 +26,7 @@ best_acc = 0.0
 
 BestMnce = 0.0  # 添加这行
 BestCGF = None
+BestIntersectionalBalance = 0.0
 
 def evaluate(feature_vec, pred_vec, type_vec, group_vec, best_acc, fair_metric=False):
     # tqdm.write("Evaluating the clustering results...")
@@ -127,6 +128,56 @@ def my_balance(predicted, g, cluster_num, group_num):
     # print(entro)
 
     return balance_v.numpy(), entro.numpy()
+
+
+def my_balance_intersectional(predicted, group_vec_list, class_num):
+    """
+    计算交叉属性的平衡性分数（my_balance的"木桶效应"逻辑扩展版）
+    :param predicted: 预测的聚类标签 (Tensor or Numpy Array)
+    :param group_vec_list: 敏感属性的列表，每个元素是一个属性向量 (list of Tensors or Numpy Arrays)
+    :param class_num: 聚类的数量
+    :return: 交叉平衡性分数
+    """
+    if not isinstance(predicted, np.ndarray):
+        predicted = predicted.cpu().numpy()
+
+    # 1. 创建交叉属性
+    # 将group_vec_list中的张量或数组转换为numpy数组
+    groups_np = [g.cpu().numpy() if isinstance(g, torch.Tensor) else np.asarray(g) for g in group_vec_list]
+    
+    # 将多个属性向量堆叠成一个 (n_samples, n_attributes) 的数组
+    cross_group_tuples = list(zip(*groups_np))
+    
+    # 使用pandas.factorize为每个独特的元组（交叉组）分配一个整数ID
+    # `intersectional_g`是每个样本所属交叉组的ID, `unique_cross_groups`是所有独特的交叉组
+    intersectional_g, unique_cross_groups = pd.factorize(cross_group_tuples)
+    group_num = len(unique_cross_groups)
+    
+    print(f"检测到 {len(group_vec_list)} 个敏感属性，组合成 {group_num} 个交叉群组。")
+
+    # 2. 计算平衡性
+    # 确保数据类型正确
+    predicted = torch.as_tensor(predicted, dtype=torch.long)
+    intersectional_g = torch.as_tensor(intersectional_g, dtype=torch.long)
+
+    # 创建一个 (聚类数 x 交叉组数) 的计数矩阵
+    count = torch.zeros((class_num, group_num))
+    for ci, gi in zip(predicted, intersectional_g):
+        count[ci, gi] += 1
+    
+    # 避免除以零
+    count[count == 0] = 1e-5  # 使用一个很小的数代替0，避免后续计算问题
+    
+    # 3. 计算 min/max 比率
+    # a. 对每个聚类（每一行），计算各组数量的min/max比率
+    # amax(dim=1) 找到每行（每个聚类）中样本数最多的那个交叉组的数量
+    # amin(dim=1) 找到每行（每个聚类）中样本数最少的那个交叉组的数量
+    balance_per_cluster = torch.amin(count, dim=1) / torch.amax(count, dim=1)
+
+    # b. 在所有聚类的平衡性分数中，取最小值（木桶效应）
+    final_balance_score = torch.amin(balance_per_cluster)
+
+    return final_balance_score.numpy()
 
 
 # if __name__ == '__main__':
@@ -403,7 +454,7 @@ def evaluate2(feature_vec, pred_vec, type_vec, group_vec_list, epoch=None, args=
     :param args: 参数对象
     :return: 调整后的预测标签
     """
-    global best_balance, best_nmi, best_ari, best_acc, BestCGF
+    global best_balance, best_nmi, best_ari, best_acc, BestCGF, BestIntersectionalBalance
     
     # 确保预测标签和真实标签从0开始且连续
     pred_vec_normalized = pred_vec - pred_vec.min()
@@ -558,11 +609,27 @@ def evaluate2(feature_vec, pred_vec, type_vec, group_vec_list, epoch=None, args=
         print(f"计算Fβ-Multi时出错：{str(e)}")
         F_multi = 0.0
 
+    # 新增：计算并打印"木桶效应"交叉平衡分数
+    intersectional_balance = 0.0
+    try:
+        num_clusters = len(np.unique(pred_vec_normalized))
+        if num_clusters > 1:  # 只有一个聚类时，此指标无意义
+            intersectional_balance = my_balance_intersectional(
+                predicted=pred_vec_normalized,
+                group_vec_list=group_vec_list,
+                class_num=num_clusters
+            )
+    except Exception as e:
+        print(f"计算交叉平衡分数(最差比率法)时出错: {e}")
+        
     # 在计算完所有指标后，只有在预热阶段结束后才更新最佳结果
     if epoch is not None and args is not None and epoch > args.WarmAll:
         if combined_balance > best_balance:
             best_balance = combined_balance
         
+        if intersectional_balance > BestIntersectionalBalance:
+            BestIntersectionalBalance = intersectional_balance
+            
         if nmi * 100 > best_nmi:
             best_nmi = nmi * 100
         
@@ -574,7 +641,8 @@ def evaluate2(feature_vec, pred_vec, type_vec, group_vec_list, epoch=None, args=
     
     # 打印当前结果
     print("\n=== 聚类评估结果 ===")
-    print(f"综合平衡分数: {combined_balance:.2f}%")
+    print(f"综合平衡分数 (平均偏差法): {combined_balance:.2f}%")
+    print(f"交叉平衡分数 (最差比率法): {intersectional_balance*100:.2f}%")
     print(f"NMI: {nmi*100:.2f}%")
     print(f"ARI: {ari*100:.2f}%")
     print(f"准确率: {acc*100:.2f}%")
@@ -622,7 +690,8 @@ def evaluate2(feature_vec, pred_vec, type_vec, group_vec_list, epoch=None, args=
     # 只有在预热阶段结束后才打印最佳结果
     if epoch is not None and args is not None and epoch > args.WarmAll:
         print("\n=== 最佳评估结果 ===")
-        print(f"最佳平衡分数: {best_balance:.2f}%")
+        print(f"最佳平衡分数 (平均偏差法): {best_balance:.2f}%")
+        print(f"最佳交叉平衡分数 (最差比率法): {BestIntersectionalBalance*100:.2f}%")
         print(f"最佳NMI: {best_nmi:.2f}%")
         print(f"最佳ARI: {best_ari:.2f}%")
         print(f"最佳准确率: {best_acc:.2f}%")

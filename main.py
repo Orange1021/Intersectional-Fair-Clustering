@@ -26,7 +26,7 @@ if __name__ == "__main__":
     parser.add_argument("--batch_size", help="batch size", default=512, type=int)
     parser.add_argument("--train_epoch", help="training epochs", default=300, type=int)
     parser.add_argument("--group_num", default=2, type=int)
-    parser.add_argument("--sampling_method", default='', type=str,
+    parser.add_argument("--sampling_method", default='os', type=str,
         help="采样方法: 'bm'(bias-mimicking), 'us'(under-sampling), 'os'(over-sampling)。多敏感属性时自动采用分属性均衡采样，此参数无效。")
 
     parser.add_argument('--NetVersion', default='Shuffle', type=str)  # New, Old, Explicit, Shuffle
@@ -67,6 +67,8 @@ if __name__ == "__main__":
     parser.add_argument("--BalanceLossType", default='KL')  # KL MSE MAE
     parser.add_argument("--BalanceLossNoDetach", action='store_true')
     parser.add_argument("--OneHot", help="", default=0.04, type=float)
+
+    parser.add_argument("--LambdaIntersectionalBalance", help="Weight for the new intersectional balance loss (worst-case ratio)", default=0.2, type=float)
 
     parser.add_argument("--loss_cons", help="", default=0.0, type=float)
     parser.add_argument("--loss_self_cons", help="", default=0.0, type=float)

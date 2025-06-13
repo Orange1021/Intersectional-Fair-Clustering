@@ -71,6 +71,7 @@ This project utilizes datasets commonly used in fair clustering research. Follow
 *   **MNIST-USPS**: A combination of two digit recognition datasets, MNIST and USPS. The source dataset is treated as a sensitive attribute.
 *   **ReverseMNIST**: A variant of MNIST where one group consists of original images and the other of color-inverted images.
 *   **MTFL**: The Multi-Task Facial Landmark dataset, which includes attributes like wearing glasses and smiling that can be used as sensitive attributes.
+*   **HAR**: The Human Activity Recognition dataset, where sensory data from different individuals can introduce bias.
 
 We follow the setup from [DFC (Li et al., CVPR 2020)](https://openaccess.thecvf.com/content_CVPR_2020/papers/Li_Deep_Fair_Clustering_for_Visual_Learning_CVPR_2020_paper.pdf) to obtain these datasets.
 
@@ -82,21 +83,27 @@ You can train and evaluate our model using `main.py`.
 
 #### Training
 
-Our framework is designed to handle multiple sensitive attributes and optimize for intersectional fairness.
+Our framework is designed to handle multiple sensitive attributes and optimize for intersectional fairness. Below are recommended commands for each dataset, including suggested seeds and the use of over-sampling (`--sampling_method os`) to handle data imbalance.
 
 ```bash
-# Train on MTFL with an intersectional fairness weight of 0.5.
-python main.py --dataset MTFL --LambdaFair 0.5 --seed 9116
+# Color Reverse MNIST
+python main.py --dataset ReverseMNIST --seed 0 --sampling_method os
 
-# Train on Office-31 with a higher fairness weight and over-sampling.
-python main.py --dataset Office --LambdaFair 0.7 --sampling_method os --seed 0
+# Office-31
+python main.py --dataset Office --seed 0 --sampling_method os
 
-# Train on MNIST-USPS
-python main.py --dataset MNISTUSPS --LambdaFair 0.5 --seed 9116
+# MTFL
+python main.py --dataset MTFL --seed 9116 --sampling_method os
+
+# HAR
+python main.py --dataset HAR --seed 9116 --sampling_method os
+
+# MNIST-USPS
+python main.py --dataset MNISTUSPS --seed 9116 --sampling_method os
 ```
 
 **Key Arguments**:
-*   `--dataset`: Specify the dataset (`MTFL`, `Office`, `MNISTUSPS`, `ReverseMNIST`).
+*   `--dataset`: Specify the dataset (`Office`, `MNISTUSPS`, `MTFL`, `ReverseMNIST`, `HAR`).
 *   `--LambdaFair`: **(Our Core Contribution)** The weight for the intersectional fairness loss term. This parameter controls the strength of the constraint on the **joint distribution** of multiple sensitive attributes. A value greater than 0 enables our proposed method.
 *   `--LambdaClu`: The weight for the clustering-related loss terms.
 *   `--sampling_method`: Optional data balancing method (`os`, `us`, `bm`).
@@ -115,12 +122,13 @@ We provide a range of command-line arguments to control the training process and
 #### Core Fairness and Clustering Parameters
 
 *   `--LambdaFair`: **(Our Core Contribution)** The weight for the intersectional fairness loss term. This parameter controls the strength of the constraint on the **joint distribution** of multiple sensitive attributes, corresponding to `β` in our paper. A value greater than 0 enables our proposed method. (Default: `0.20`)
+*   `--LambdaIntersectionalBalance`: The weight for the newly added "worst-case ratio" intersectional balance loss. It directly optimizes the metric that was previously underperforming. (Default: `0.0`)
 *   `--LambdaClu`: The weight for the clustering-related loss terms (`InfoBalanceLoss` and `OneHot`). Corresponds to `α` in our paper. (Default: `0.04`)
 *   `--Reconstruction`: The weight for the feature reconstruction loss. (Default: `1.0`)
 
 #### Dataset and Sampling
 
-*   `--dataset`: Selects the dataset to use. Choices: `MTFL`, `Office`, `MNISTUSPS`, `ReverseMNIST`.
+*   `--dataset`: Selects the dataset to use. Choices: `Office`, `MNISTUSPS`, `MTFL`, `ReverseMNIST`, `HAR`.
 *   `--sampling_method`: Data balancing method to apply to the training set. Choices: `os` (over-sampling), `us` (under-sampling), `bm` (bias-mimicking). (Default: `''`)
 
 #### General Training

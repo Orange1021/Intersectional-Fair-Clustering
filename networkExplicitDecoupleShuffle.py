@@ -494,6 +494,39 @@ class Net(nn.Module):
         loss = torch.mean(torch.sum(probs * dist, dim=1))
         return loss
 
+    def intersectional_balance_loss(self, predicted_probs, group_vec_list):
+        """
+        计算基于"最差比率法"的交叉平衡损失。
+        损失 = 1 - 交叉平衡分数。
+        """
+        # 1. 创建交叉属性ID
+        groups_np = [g.cpu().numpy() for g in group_vec_list]
+        cross_group_tuples = list(zip(*groups_np))
+        intersectional_g_numeric, _ = pd.factorize(cross_group_tuples)
+        intersectional_g = torch.from_numpy(intersectional_g_numeric).to(predicted_probs.device)
+        group_num = len(np.unique(intersectional_g_numeric))
+        class_num = self.class_num
+
+        # 2. 计算软计数的混淆矩阵
+        # O 的形状为 (class_num, group_num)
+        O = torch.zeros((class_num, group_num), device=predicted_probs.device)
+        for g_val in range(group_num):
+            mask = (intersectional_g == g_val)
+            if mask.sum() > 0:
+                O[:, g_val] = torch.sum(predicted_probs[mask], dim=0)
+
+        # 避免除以零
+        O[O == 0] = 1e-5
+
+        # 3. 计算 min/max 比率
+        balance_per_cluster = torch.amin(O, dim=1) / torch.amax(O, dim=1)
+        
+        # 4. 计算最终的平衡分数（木桶效应）
+        final_balance_score = torch.amin(balance_per_cluster)
+
+        # 返回损失
+        return 1.0 - final_balance_score
+
     def update_cluster_center(self, centers):
         """
         更新聚类中心
@@ -682,6 +715,7 @@ class Net(nn.Module):
             loss_onehot_epoch = 0.0
             loss_consistency_epoch = 0.0
             loss_proto_epoch = 0.0
+            loss_intersectional_balance_epoch = 0.0 # 新增
 
             # 使用tqdm创建批次进度条
             batch_pbar = tqdm(train_dataloader, desc=f'Epoch {epoch+1}/{epochs}', leave=False)
@@ -710,9 +744,15 @@ class Net(nn.Module):
                 for i, g_i in enumerate(g):
                     if args.GlobalBalanceLoss > 0:
                         balance_loss = balance_loss + args.GlobalBalanceLoss * self.group_wise_balance_loss(z[0], g)
+
+                # 新增：交叉平衡损失
+                intersectional_loss = torch.tensor(0.0, device=x.device)
+                if args.LambdaIntersectionalBalance > 0:
+                    probs = F.softmax(self.encode_class(z[0]), dim=1)
+                    intersectional_loss = args.LambdaIntersectionalBalance * self.intersectional_balance_loss(probs, g)
                 
                 # 总损失
-                loss = recon_loss + d_loss + balance_loss
+                loss = recon_loss + d_loss + balance_loss + intersectional_loss
                 
                 # 更新参数
                 optimizer_g.zero_grad()
@@ -731,6 +771,8 @@ class Net(nn.Module):
                 loss_decenc_epoch += recon_loss.item()
                 loss_discriminative_epoch += d_loss.item()
                 loss_global_balance_epoch += balance_loss.item()
+                if intersectional_loss > 0:
+                    loss_intersectional_balance_epoch += intersectional_loss.item()
                 # 下面这些损失，遍历所有敏感属性求平均
                 loss_info_global_epoch += self.group_wise_balance_loss(z[0], g).item()
                 loss_info_balance_epoch += self.group_wise_balance_loss(z[0], g).item()
@@ -758,6 +800,7 @@ class Net(nn.Module):
             loss_onehot_epoch /= len_train_dataloader
             loss_consistency_epoch /= len_train_dataloader
             loss_proto_epoch /= len_train_dataloader
+            loss_intersectional_balance_epoch /= len_train_dataloader # 新增
 
             # 打印训练信息
             print('\nEpoch [{: 3d}/{: 3d}]'.format(epoch + 1, epochs), end='')
@@ -789,6 +832,8 @@ class Net(nn.Module):
                 print(', OneHot:{:04f}'.format(loss_onehot_epoch), end='')
             if loss_proto_epoch != 0:
                 print(', Proto:{:04f}'.format(loss_proto_epoch), end='')
+            if loss_intersectional_balance_epoch != 0: # 新增
+                print(', IntersectionalBalance:{:04f}'.format(loss_intersectional_balance_epoch), end='')
             if confidence_sum != 0:
                 print(', Confidence:{:04f}'.format(confidence_sum), end='')
             print()
