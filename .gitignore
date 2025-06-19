@@ -1,0 +1,40 @@
+# Python specific
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+
+# IDE and OS specific files
+.idea/
+.vscode/
+.DS_Store
+*.swp
+*.swo
+.ipynb_checkpoints/
+
+# Datasets - NEVER commit data files
+data/
+Dataset/
+D__VirtualMachine/
+
+# Results, Logs, and Pre-trained Models
+Results/
+PreTrain/
+*.log
+*.pth
+*.pt
+
+# Specific log files and temporary files from the project root
+temp.py
+
+
+# Project-specific folders to ignore as requested
+NPEET/
+参考代码/
+QuickConfig/
+md/
+Fig/
+figures/ 
