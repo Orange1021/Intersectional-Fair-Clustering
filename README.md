@@ -1,7 +1,6 @@
 # Intersectional Fair Clustering: An Information-Theoretic Formulation
 
 [![Paper-Link](https://img.shields.io/badge/Paper-Coming%20Soon-blue)](https://arxiv.org/abs/your_paper_id) <!-- Replace with your paper link once available -->
-[![Conference](https://img.shields.io/badge/AAAI-2026-blue)](https://aaai.org/Conferences/AAAI-26/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 **Official PyTorch implementation for our paper: [Intersectional Fair Clustering: An Information-Theoretic Formulation](https://arxiv.org/abs/your_paper_id)** (Paper under review)  
@@ -107,4 +106,11 @@ We provide a range of command-line arguments to control the training process and
 ## Citation
 
 If you find our work or code useful in your research, please consider citing our paper:
+```bibtex
+@inproceedings{zhao2024intersectional,
+  title   = {Intersectional Fair Clustering: An Information-Theoretic Formulation},
+  author  = {Qincheng Zhao and Peng Zhang},
+  booktitle = {Under Review},
+  year    = {2024}
+}
 ```
