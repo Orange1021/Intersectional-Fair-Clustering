@@ -13,28 +13,9 @@ This codebase is built upon the foundation of the CVPR 2023 paper **[FCMI](https
 
 ---
 
-## Core Insight: The Theory of Intersectional Fairness
+## Abstract
 
-Traditional fair clustering methods typically impose constraints on individual sensitive attributes (e.g., gender, race) independently. However, we theoretically demonstrate that this "additive" fairness assumption is insufficient, as it overlooks the **attribute crosstalk**—the interaction effects between attributes.
-
-Our core theoretical finding, grounded in information theory, proves that the mutual information between the combined sensitive attributes and the clustering assignment is **always less than or equal to** the sum of the mutual information of individual attributes:
-
-\\[ I(G_1, \\dots, G_S; C) \\leq \\sum_{s=1}^S I(G_s; C) \\]
-
-**Key Implications**:
-*   The equality holds if, and only if, all sensitive attributes are **conditionally independent** given the clustering assignment `C`.
-*   In real-world scenarios, attributes are often correlated (e.g., a specific combination of race and gender may face unique biases), causing the strict inequality to hold.
-*   Consequently, constraining individual attributes separately systematically underestimates the compounded bias faced by intersectional groups (e.g., "African-American women"). **Explicitly modeling the joint distribution of attributes is therefore a necessity** for achieving true intersectional fairness.
-
-## Framework
-
-To realize our theoretical goal, we propose a "Multi-Expert + Attention Fusion + Hierarchical Discriminators" framework:
-
-1.  **Multi-Expert Network**: Each expert network independently learns representations for a single sensitive attribute to disentangle its marginal impact.
-2.  **Attention Fusion**: An attention mechanism is used to dynamically learn the importance of different attribute combinations, generating a fused representation that captures intersectional effects.
-3.  **Hierarchical Discriminators**:
-    *   **Individual Discriminators**: Enforce fairness for each attribute separately.
-    *   **Joint Discriminator**: A dedicated discriminator that operates on the joint distribution of attributes, directly enforcing our core theoretical constraint against intersectional bias.
+Fair clustering is critical for mitigating bias in unsupervised learning. However, existing methods largely overlook intersectional fairness, where discrimination stems from the interplay of multiple sensitive attributes. This oversight can perpetuate significant unfairness against individuals at specific intersections of these attributes. To address this gap, we propose a principled information-theoretic framework for intersectional fair clustering. Our core idea is to directly minimize the joint mutual information between the complete set of sensitive attributes and the cluster assignments. We introduce a novel adaptive optimization framework to achieve this. For a small number of attributes, the framework performs explicit optimization over their combinations. For a larger number, it adaptively employs an attention-based mechanism to implicitly minimize the joint information, effectively avoiding the curse of dimensionality. Furthermore, we design new evaluation metrics tailored for the intersectional setting. Extensive experiments demonstrate that our method significantly outperforms state-of-the-art baselines in achieving both high clustering utility and superior fairness across multiple intersecting groups.
 
 ## Setup
 
@@ -89,8 +70,9 @@ python main.py --dataset MNISTUSPS --seed 9116 --sampling_method os
 
 **Key Arguments**:
 *   `--dataset`: Specify the dataset (`Office`, `MNISTUSPS`, `MTFL`, `ReverseMNIST`).
-*   `--LambdaFair`: **(Our Core Contribution)** The weight for the intersectional fairness loss term. This parameter controls the strength of the constraint on the **joint distribution** of multiple sensitive attributes. A value greater than 0 enables our proposed method.
-*   `--LambdaClu`: The weight for the clustering-related loss terms.
+*   `--LambdaFair`: The weight for our adaptive intersectional fairness loss term term (`L_fair`), corresponding to `β` in our paper. This parameter controls the strength of the fairness constraint.
+*   `--LambdaClu`: The weight for the clustering-related loss terms (compactness and balance).
+*   `--Reconstruction`: The weight for the feature reconstruction loss (`L_rec`), corresponding to `λ` in our paper.
 *   `--sampling_method`: Optional data balancing method (`os`, `us`, `bm`).
 *   `--seed`: The random seed for reproducibility.
 
@@ -106,10 +88,9 @@ We provide a range of command-line arguments to control the training process and
 
 #### Core Fairness and Clustering Parameters
 
-*   `--LambdaFair`: **(Our Core Contribution)** The weight for the intersectional fairness loss term. This parameter controls the strength of the constraint on the **joint distribution** of multiple sensitive attributes, corresponding to `β` in our paper. A value greater than 0 enables our proposed method. (Default: `0.20`)
-*   `--LambdaIntersectionalBalance`: The weight for the newly added "worst-case ratio" intersectional balance loss. It directly optimizes the metric that was previously underperforming. (Default: `0.0`)
-*   `--LambdaClu`: The weight for the clustering-related loss terms (`InfoBalanceLoss` and `OneHot`). Corresponds to `α` in our paper. (Default: `0.04`)
-*   `--Reconstruction`: The weight for the feature reconstruction loss. (Default: `1.0`)
+*   `--LambdaFair`: The weight for our adaptive intersectional fairness loss term (`L_fair`), corresponding to `β` in our paper. (Default: `0.20`)
+*   `--LambdaClu`: The weight for the clustering-related loss terms (`L_clu`), which encourages cluster compactness and balance. (Default: `0.04`)
+*   `--Reconstruction`: The weight for the feature reconstruction loss (`L_rec`), corresponding to `λ` in our paper. (Default: `1.0`)
 
 #### Dataset and Sampling
 
@@ -126,11 +107,4 @@ We provide a range of command-line arguments to control the training process and
 ## Citation
 
 If you find our work or code useful in your research, please consider citing our paper:
-```bibtex
-@inproceedings{zhao2026intersectional,
-  title   = {Intersectional Fair Clustering: An Information-Theoretic Formulation},
-  author  = {Qincheng Zhao and Peng Zhang},
-  booktitle = {AAAI Conference on Artificial Intelligence},
-  year    = {2026},
-  url     = {https://arxiv.org/abs/your_paper_id}
-}
+```
